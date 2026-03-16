@@ -1,0 +1,19 @@
+{
+  "name": "openclaw-homeassistant",
+  "version": "0.1.0",
+  "description": "Home Assistant integration for OpenClaw — voice pipeline + entity control",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": ["openclaw", "home-assistant", "voice", "smart-home"],
+  "author": "coderage-labs",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

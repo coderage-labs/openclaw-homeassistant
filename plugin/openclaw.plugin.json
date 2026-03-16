@@ -1,0 +1,6 @@
+{
+  "name": "openclaw-homeassistant",
+  "version": "0.1.0",
+  "description": "Home Assistant voice pipeline and entity control",
+  "entry": "dist/index.js"
+}

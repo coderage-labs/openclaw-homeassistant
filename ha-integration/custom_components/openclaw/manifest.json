@@ -1,0 +1,11 @@
+{
+  "domain": "openclaw",
+  "name": "OpenClaw AI Assistant",
+  "codeowners": ["@coderage-labs"],
+  "config_flow": true,
+  "dependencies": ["conversation"],
+  "documentation": "https://github.com/coderage-labs/openclaw-homeassistant",
+  "iot_class": "local_push",
+  "requirements": ["aiohttp>=3.9.0"],
+  "version": "0.1.0"
+}

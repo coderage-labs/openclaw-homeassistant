@@ -1,0 +1,18 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to OpenClaw",
+        "description": "Enter the URL and optional auth token for your OpenClaw instance. The openclaw-homeassistant plugin must be installed and running.",
+        "data": {
+          "openclaw_url": "OpenClaw URL",
+          "openclaw_token": "Auth Token (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to OpenClaw. Check the URL and ensure the plugin is running.",
+      "unknown": "Unexpected error occurred."
+    }
+  }
+}
