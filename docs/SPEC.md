@@ -135,6 +135,26 @@ export default function homeAssistantPlugin(api) {
 }
 ```
 
+### Session Model
+
+**One persistent session per voice satellite/area.** Same pattern as Telegram groups.
+
+```
+Voice PE (Garden Room)  → session: "ha:satellite:garden_room"
+Android phone (Bedroom) → session: "ha:satellite:bedroom"  
+Kitchen tablet          → session: "ha:satellite:kitchen"
+```
+
+Each session is:
+- **Persistent** — Robin remembers "you just asked me to turn the lights on" for follow-ups
+- **Scoped** — garden room conversation doesn't leak into bedroom session
+- **Shared agent** — same Robin, same tools, same memory across all sessions
+- **Lightweight** — voice sessions don't need the full history depth of main chat
+
+Session key format: `ha:satellite:{area_id}` (derived from satellite's assigned area).
+
+Falls back to `ha:satellite:{device_id}` if no area is assigned, or `ha:default` as last resort.
+
 ### Message Flow (Inbound — Voice → Robin)
 
 1. HA custom component receives voice input from pipeline
@@ -151,10 +171,12 @@ export default function homeAssistantPlugin(api) {
      "user_id": "ha_user_id"
    }
    ```
-3. Plugin creates an OpenClaw message on `homeassistant` channel:
+3. Plugin resolves the session key from `area_id` → `ha:satellite:garden_room`
+4. Plugin routes the message to that session on the `homeassistant` channel:
    ```javascript
    {
      channel: 'homeassistant',
+     sessionKey: 'ha:satellite:garden_room',
      text: "it's too warm",
      sender: { id: 'ha_user', name: 'Chris' },
      metadata: {
@@ -166,10 +188,24 @@ export default function homeAssistantPlugin(api) {
      }
    }
    ```
-4. Robin receives the message, sees area context, uses `ha_call_service` to adjust climate
-5. Robin's text response is captured by the plugin
-6. Plugin returns response to HA custom component
-7. HA feeds response text to TTS → Voice PE speaks it
+5. Robin receives the message in the garden room session, sees area context
+6. Robin uses `ha_call_service` to adjust climate, responds with text
+7. Plugin captures response, returns to HA custom component
+8. HA feeds response text to TTS → Voice PE speaks it
+
+**Multi-turn example:**
+```
+[Session: ha:satellite:garden_room]
+
+You: "Turn on the lights"
+Robin: "Garden room lights on." → ha_call_service(light, turn_on, light.garden_room)
+
+You: "Make them dimmer"          ← Robin knows "them" = garden room lights
+Robin: "Dimmed to 40%." → ha_call_service(light, turn_on, light.garden_room, {brightness: 102})
+
+You: "What's the temperature?"
+Robin: "It's 24°C in here. Want me to cool it down?"
+```
 
 ### Message Flow (Outbound — Robin → HA Proactive)
 
@@ -552,7 +588,7 @@ openclaw-homeassistant/
 - [ ] Tools: `ha_call_service`, `ha_get_states`, `ha_get_areas`, `ha_announce`
 - [ ] Area context passed from satellite → Robin
 - [ ] Area-relevant state injection in system prompt
-- [ ] Multi-turn conversation support (conversation_id tracking)
+- [ ] Persistent sessions per satellite/area (multi-turn conversation)
 - [ ] Reconnection/error handling on WebSocket
 
 ### Out (v0.2.0+)
