@@ -592,6 +592,7 @@ openclaw-homeassistant/
 - [ ] Reconnection/error handling on WebSocket
 
 ### Out (v0.2.0+)
+- [ ] **Voice context switching** — switch session context via voice command
 - [ ] Streaming responses
 - [ ] Event subscriptions (state_changed → proactive notifications)
 - [ ] Entity auto-discovery and smart tool generation
@@ -599,6 +600,89 @@ openclaw-homeassistant/
 - [ ] Media player control / music
 - [ ] Dashboard/Lovelace card showing Robin status
 - [ ] HACS store submission
+
+---
+
+## Voice Context Switching (v0.2.0)
+
+### Problem
+Each satellite has a dedicated HA session (`ha:satellite:garden_room`) scoped to home automation.
+But the user may want to ask dev/work/personal questions from the same satellite without
+polluting the HA session with irrelevant context (and vice versa).
+
+### Solution
+Voice commands to switch the active session context for a satellite:
+
+```
+"Hey Robin, developer mode"     → routes to ha:context:dev:{area}
+"Hey Robin, home mode"          → routes back to ha:satellite:{area} (default)
+"Hey Robin, personal mode"      → routes to ha:context:personal:{area}
+```
+
+### Session Routing
+
+Each satellite can route to multiple session contexts:
+
+```
+ha:satellite:garden_room          ← default (home automation)
+ha:context:dev:garden_room        ← dev/work context
+ha:context:personal:garden_room   ← personal (calendar, email, etc.)
+```
+
+The plugin tracks the **active context** per satellite. On a context switch command:
+1. Plugin intercepts the command (doesn't forward to agent)
+2. Updates the active context mapping for that satellite
+3. Confirms via TTS: "Switched to developer mode"
+4. All subsequent messages from that satellite route to the new session
+5. Auto-revert to home mode after configurable timeout (e.g. 15 min idle)
+
+### Implementation
+
+```typescript
+// Per-satellite active context tracking
+const activeContext = new Map<string, string>();
+// Default: 'home' for all satellites
+
+// Context switch detection (before routing to agent)
+function detectContextSwitch(text: string): string | null {
+  const patterns = [
+    { match: /\b(developer|dev|coding|work)\s*mode\b/i, context: 'dev' },
+    { match: /\b(home|house|automation)\s*mode\b/i, context: 'home' },
+    { match: /\b(personal|private)\s*mode\b/i, context: 'personal' },
+  ];
+  for (const p of patterns) {
+    if (p.match.test(text)) return p.context;
+  }
+  return null;
+}
+
+// Session key resolution
+function getSessionKey(areaId: string, context: string): string {
+  if (context === 'home') return `ha:satellite:${areaId}`;
+  return `ha:context:${context}:${areaId}`;
+}
+```
+
+### Auto-revert
+- After 15 minutes of no voice input, revert to `home` context
+- Configurable per-satellite timeout
+- Prevents stale dev sessions from confusing home automation commands the next morning
+
+### Context Indicators
+- TTS confirmation on switch: "Developer mode" / "Home mode"
+- Optional: HA entity `select.{area}_robin_context` exposed in dashboard
+- Optional: LED colour change on Voice PE (if supported via HA automation)
+
+### What each context gets
+
+| Context | Session scope | Tools available |
+|---------|--------------|-----------------|
+| **home** | HA commands, device history | All HA tools + general (calendar, weather) |
+| **dev** | Dev conversation, code discussion | All tools (HA + dev). History stays dev-focused |
+| **personal** | Email, calendar, personal queries | All tools. History stays personal |
+
+All contexts share the same agent (Robin) and the same capabilities — it's purely
+the conversation history that stays scoped and clean.
 
 ---
 
