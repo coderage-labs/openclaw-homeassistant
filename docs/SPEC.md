@@ -603,6 +603,110 @@ openclaw-homeassistant/
 
 ---
 
+## Adaptive TTS Routing (v0.1.0)
+
+### Problem
+Piper (local) is fast and free but lacks emotional expressiveness. Cloud TTS (OpenAI, ElevenLabs)
+sounds natural but costs money and adds latency. Most home automation responses don't need
+expressiveness, but conversational replies do.
+
+### Solution
+Robin tags responses with TTS hints. The plugin parses the tag, routes to the appropriate
+TTS engine, and strips the tag before speaking.
+
+### Tags
+
+| Tag | Routes to | Use case |
+|-----|-----------|----------|
+| *(no tag)* | Piper (local, default) | Short confirmations: "Lights on", "Set to 20 degrees" |
+| `[expressive]` | OpenAI TTS / ElevenLabs | Conversational, emotional, jokes, storytelling, morning briefings |
+| `[whisper]` | Piper low volume / soft voice | Night mode, quiet hours |
+| `[urgent]` | Piper with alert tone prefix | Security alerts, alarms, critical notifications |
+| `[announce]` | Piper/cloud on ALL satellites | House-wide announcements ("Someone's at the door") |
+
+Tags can be combined: `[urgent][announce] Motion detected on the driveway at 2am`
+
+### How Robin Knows It's Voice
+
+The plugin injects voice context into the session's system prompt automatically:
+
+```
+You are responding via voice through a Home Assistant satellite
+in the {area_name}. Keep responses concise and spoken-word friendly
+(no markdown, no URLs, no formatting).
+
+TTS routing tags (optional, place at start of response):
+- [expressive] — use for conversational/emotional responses (cloud TTS)
+- [whisper] — quiet/night mode
+- [urgent] — prefix with alert tone
+- [announce] — play on all satellites
+Default (no tag) uses fast local TTS — best for short confirmations.
+```
+
+This system prompt fragment is injected by the plugin when `input_type: "voice"`.
+Robin doesn't need to know about TTS engines — it just sees the prompt and tags naturally.
+
+### Plugin Processing
+
+```typescript
+interface TTSRouting {
+  engine: 'piper' | 'openai' | 'elevenlabs';
+  volume?: 'normal' | 'low';
+  alertTone?: boolean;
+  broadcast?: boolean;
+}
+
+function parseTTSTags(text: string): { routing: TTSRouting; cleanText: string } {
+  const tags = new Set<string>();
+  let clean = text;
+
+  // Extract all tags from start of response
+  const tagPattern = /^\[(\w+)\]\s*/;
+  let match;
+  while ((match = tagPattern.exec(clean))) {
+    tags.add(match[1]);
+    clean = clean.slice(match[0].length);
+  }
+
+  const routing: TTSRouting = {
+    engine: tags.has('expressive') ? config.expressiveEngine : 'piper',
+    volume: tags.has('whisper') ? 'low' : 'normal',
+    alertTone: tags.has('urgent'),
+    broadcast: tags.has('announce'),
+  };
+
+  return { routing, cleanText: clean };
+}
+```
+
+### Config
+
+```json
+{
+  "tts": {
+    "default_engine": "piper",
+    "expressive_engine": "openai",
+    "openai_voice": "nova",
+    "openai_api_key": "sk-...",
+    "whisper_volume": 0.3,
+    "urgent_alert_sound": "/media/alert.mp3"
+  }
+}
+```
+
+### Voice-Aware Response Style
+
+When responding via voice, Robin should:
+- Keep it concise — no walls of text
+- No markdown, bullet points, tables, or URLs
+- Use natural spoken language ("twenty degrees" not "20°C")
+- Round numbers ("about two hours" not "1 hour 47 minutes")
+- Front-load the answer — say the important thing first
+
+The system prompt fragment handles this automatically.
+
+---
+
 ## Voice Context Switching (v0.2.0)
 
 ### Problem
